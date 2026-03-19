@@ -21,18 +21,19 @@ body{background:linear-gradient(135deg,#1a1a2e,#16213e);min-height:100vh;display
 .desk-top{height:12px;background:var(--desk);border-radius:2px;box-shadow:0 2px 0 #7a3e1f}
 .desk-leg{width:8px;height:38px;background:#7a3e1f;position:absolute;bottom:0}
 .desk-leg.left{left:10px}.desk-leg.right{right:10px}
-.computer{bottom:50px;left:50%;transform:translateX(-50%);width:40px;height:30px;background:#333;position:absolute;border-radius:2px;display:none}
+.computer{display:none}
 .computer.active{display:block}
 .screen{width:36px;height:22px;background:#001100;margin:2px auto;border-radius:1px;display:flex;align-items:center;justify-content:center}
 .screen.working{background:#003300}
 .screen-text{color:#0f0;font-size:4px;animation:blink 0.5s infinite}
 @keyframes blink{0%,100%{opacity:0.8}50%{opacity:0.4}}
 .stand{width:10px;height:6px;background:#444;margin:0 auto}
-.coffee{position:absolute;bottom:52px;right:-5px;width:12px;height:10px;background:#fff;border-radius:0 0 2px 2px}
+.coffee,.notebook,.pen{position:absolute}
+.coffee{bottom:52px;right:-5px;width:12px;height:10px;background:#fff;border-radius:0 0 2px 2px}
 .coffee::before{content:'';position:absolute;right:-4px;top:2px;width:4px;height:6px;border:2px solid #fff;border-left:none;border-radius:0 4px 4px 0}
 .coffee::after{content:'☕';position:absolute;top:-8px;font-size:6px}
-.notebook{position:absolute;bottom:52px;left:-10px;width:15px;height:18px;background:#fff;transform:rotate(-5deg)}
-.pen{position:absolute;bottom:60px;left:0;width:4px;height:20px;background:#ff6b35;transform:rotate(15deg)}
+.notebook{bottom:52px;left:-10px;width:15px;height:18px;background:#fff;transform:rotate(-5deg)}
+.pen{bottom:60px;left:0;width:4px;height:20px;background:#ff6b35;transform:rotate(15deg)}
 .bed{position:absolute;bottom:80px;right:80px;width:120px;height:60px}
 .bed-frame{width:100%;height:20px;background:#8b4513;position:absolute;bottom:0;border-radius:2px}
 .bed-mattress{width:100%;height:30px;background:#fff;position:absolute;bottom:20px;border-radius:2px}
@@ -59,7 +60,7 @@ body{background:linear-gradient(135deg,#1a1a2e,#16213e);min-height:100vh;display
 .zzz{position:absolute;top:-25px;right:-25px;font-size:14px;color:#666;opacity:0}
 .char.sleeping .zzz{animation:zzz 2s infinite}
 @keyframes zzz{0%{opacity:0;transform:translate(0,0) scale(0.5)}50%{opacity:1}100%{opacity:0;transform:translate(25px,-25px) scale(1.2)}}
-.bar{position:fixed;top:20px;left:20px;background:rgba(0,0,0,0.85);padding:15px 20px;border-radius:4px;color:#fff;border:2px solid #444;z-index:1000;min-width:150px}
+.bar{position:fixed;top:20px;left:20px;background:rgba(0,0,0,0.85);padding:15px 20px;border-radius:4px;color:#fff;border:2px solid #444;z-index:1000;min-width:160px}
 .bar h3{color:#ffd700;margin:0 0 10px;font-size:14px}
 .dot{width:10px;height:10px;border-radius:50%;background:#ff4444;display:inline-block;margin-right:8px}
 .dot.on{background:#0f0;box-shadow:0 0 10px #0f0;animation:pulse 1s infinite}
@@ -72,6 +73,7 @@ body{background:linear-gradient(135deg,#1a1a2e,#16213e);min-height:100vh;display
 .pic{position:absolute;top:55px;right:100px;width:50px;height:40px;background:#8b6914;border:3px solid #5a4a1a;border-radius:2px}
 .pic::before{content:'🌅';font-size:20px;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}
 .sync-status{font-size:10px;color:#888;margin-top:8px}
+.time{font-size:10px;color:#666;margin-top:4px}
 </style>
 </head>
 <body>
@@ -80,6 +82,7 @@ body{background:linear-gradient(135deg,#1a1a2e,#16213e);min-height:100vh;display
 <div><span class="dot" id="dot"></span><span id="txt">初始化中...</span></div>
 <div style="margin-top:8px">任务数: <span id="cnt">0</span></div>
 <div class="sync-status" id="sync">🔄 同步中...</div>
+<div class="time" id="time"></div>
 </div>
 <div class="scene">
 <div class="plant"><div class="leaf"></div><div class="leaf"></div><div class="leaf"></div><div class="pot"></div></div>
@@ -102,26 +105,28 @@ body{background:linear-gradient(135deg,#1a1a2e,#16213e);min-height:100vh;display
 <div class="char" id="char"><div class="head"><div class="hair"></div><div class="eyes"><div class="eye"></div><div class="eye"></div></div><div class="mouth"></div></div><div class="torso"></div><div class="arms"><div class="arm left"></div><div class="arm right"></div></div><div class="legs"><div class="leg"></div><div class="leg"></div></div><div class="zzz">Zzz...</div></div>
 </div>
 <script>
-// 实时状态同步 - Polling 方式
-const API_BASE = 'https://ai-pixel-office.vercel.app/api';
+// 实时状态同步 - 从 GitHub 读取 status.json
+const STATUS_URL = 'https://raw.githubusercontent.com/Spareaftertaste/ai/main/status.json?t=' + Date.now();
 
-let localState = { working: false, tasks: 0 };
+let lastState = null;
 
 async function fetchState() {
     try {
-        const res = await fetch(API_BASE + '/status', { 
-            cache: 'no-cache',
-            headers: { 'Accept': 'application/json' }
-        });
+        const res = await fetch(STATUS_URL);
         if (res.ok) {
             const data = await res.json();
-            localState = data;
-            updateUI(data.working, data.tasks);
-            document.getElementById('sync').textContent = '✅ 已同步';
-            document.getElementById('sync').style.color = '#0f0';
+            // 检测状态变化
+            if (JSON.stringify(data) !== JSON.stringify(lastState)) {
+                lastState = data;
+                updateUI(data.working, data.tasks);
+                const time = new Date().toLocaleTimeString('zh-CN');
+                document.getElementById('sync').textContent = '✅ 已同步 ' + time;
+                document.getElementById('sync').style.color = '#0f0';
+                document.getElementById('time').textContent = '更新: ' + time;
+            }
         }
     } catch (e) {
-        document.getElementById('sync').textContent = '⚠️ 离线模式';
+        document.getElementById('sync').textContent = '⚠️ 加载失败';
         document.getElementById('sync').style.color = '#fa0';
     }
 }
@@ -136,8 +141,8 @@ function updateUI(working, tasks) {
     document.getElementById('scr').className = working ? 'screen working' : 'screen';
 }
 
-// 每2秒同步一次状态
-setInterval(fetchState, 2000);
+// 每3秒同步一次状态
+setInterval(fetchState, 3000);
 fetchState();
 </script>
 </body>
